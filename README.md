@@ -1,68 +1,67 @@
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+# One thousand and one actions
 
-## Available Scripts
+Title freely inspired by _One Thousand and One Nights_.
 
-In the project directory, you can run:
+## Introduction
 
-### `npm start`
+Last week a coworker created a tool to analyse tenths of thousand of information and decided to dispatch an action for each information. He used React connected to redux. He made an interesting choice, which led to this shirt article/project. He is dispatching an action for each info, which means dispatching tenths of thousand of actions in a couple of minutes (let's say 10 actions per second). Both React and redux plays have no performance issues with that, but the whole application was freezing during the computation.  
+So the question is: **how can I avoid the feeze?**
 
-Runs the app in the development mode.<br>
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+## Avoiding the freeze avoiding dispatching thousand of actions
 
-The page will reload if you make edits.<br>
-You will also see any lint errors in the console.
+Dispatching one single action at the end of the computation is obviously the easiest solution. Maybe it always could be the only solution to follow. But maybe there could be a use case when we need to dispatch lots of actions, or just we'd rather dispatch them. So, let's see how we can do that.
 
-### `npm test`
+## The example project
 
-Launches the test runner in the interactive watch mode.<br>
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+I made a simple react/redux project, using CRA. The redux store contains just one counter reducer, with a single counter value. I created an action to reset the counter valute to zero and and action to increment the counter value by one. I eventually added a selector to retrieve the counter value.  
+The UI presents the counter value and a button to reset it, an input text where I can choose the number of itereations to perform and several sections with a button to start the specific test of the section.  
+You can clone this project and run `yarn` and `yarn start` to execute it in your browser.
 
-### `npm run build`
+## How to reproduce the freeze
 
-Builds the app for production to the `build` folder.<br>
-It correctly bundles React in production mode and optimizes the build for the best performance.
+I wrote this code in the click callback of the second logic:
 
-The build is minified and the filenames include the hashes.<br>
-Your app is ready to be deployed!
+```js
+const onClick = () => {
+    for(let i=0; i<iterations; ++i) {
+        incrementCounter();
+    }
+};
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+The *incrementCounter* function is the bound action creator to increment counter value by one, so it performs a redux dispatch. This code generates a **freeze** of the UI.
 
-### `npm run eject`
+## The trick to avoid the freeze
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+At the beginning, I simply created a _sleep_ function:
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+```js
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+```
 
-Instead, it will copy all the configuration files and the transitive dependencies (Webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+And added a sleep call at each iteration:
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+```js
+const onClick = () => {
+    for(let i=0; i<iterations; ++i) {
+        incrementCounter();
+        await sleep(1); // <-- THIS IS THE HUGLY TRICK
+    }
+};
+```
 
-## Learn More
+Surely it's not the best approch, but it works!  
+Unfortunaly, the sleep function delays all the computation process too much. So I refined the method by calling it only when at least a 10% of iterations occurred. Obviously you can choose the step value you prefer, keeping in mind that the less sleep you call, the better.  
+So, finally the code is something like this:
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/code-splitting
-
-### Analyzing the Bundle Size
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size
-
-### Making a Progressive Web App
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app
-
-### Advanced Configuration
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/advanced-configuration
-
-### Deployment
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/deployment
-
-### `npm run build` fails to minify
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify
+```js
+const onClick = async() => {
+    const sleepStep = Math.floor(iterations / 10); // <-- THE 10% STEP
+    for(let i=0; i<iterations; ++i) {
+        incrementCounter();
+        if (i % sleepStep === 0) { // <-- REDUCE SLEEP CALLS
+            await sleep(1); // <-- AGAIN THE HUGLY TRICK
+        }
+    }
+};
+```
