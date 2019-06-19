@@ -33,7 +33,7 @@ The *incrementCounter* function is the bound action creator to increment counter
 
 ## The trick to avoid the freeze
 
-It the beginning, I simply created a _sleep_ function:
+In the beginning, I simply created a _sleep_ function:
 
 ```js
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
